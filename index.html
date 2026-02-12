@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLC Flash Messenger</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #000; color: #fff; text-align: center; padding: 20px; }
+        .box { max-width: 400px; margin: auto; border: 2px solid #333; padding: 25px; border-radius: 20px; background: #111; }
+        h1 { color: #f1c40f; font-size: 24px; }
+        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; border-radius: 10px; padding: 10px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 15px; margin-top: 20px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        .btn-flash { background: #f1c40f; color: #000; }
+        #indicator { width: 50px; height: 50px; border-radius: 50%; background: #333; margin: 20px auto; transition: 0.1s; }
+        .status { color: #888; font-size: 14px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="box">
+    <h1>VLC Messenger</h1>
+    <p>Text to Flashlight (Morse Code)</p>
+    
+    <div id="indicator"></div>
+    
+    <textarea id="textInput" placeholder="Type message here..."></textarea>
+    
+    <button class="btn btn-flash" onclick="startTransmission()">TRANSMIT VIA LIGHT</button>
+    
+    <div id="status" class="status">Status: Ready</div>
+</div>
+
+<script>
+    const MORSE_CODE = {
+        'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
+        'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
+        'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
+        'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+        'Y': '-.--', 'Z': '--..', '1': '.----', '2': '..---', '3': '...--',
+        '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..',
+        '9': '----.', '0': '-----', ' ': '/'
+    };
+
+    let track = null;
+
+    // क्यामेरा र फ्ल्यासलाइट एक्सेस लिने
+    async function initFlash() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            track = stream.getVideoTracks()[0];
+        } catch (err) {
+            alert("फ्ल्यासलाइट चलाउन क्यामेरा अनुमति चाहिन्छ!");
+        }
+    }
+
+    async function toggleFlash(on) {
+        if (!track) return;
+        try {
+            await track.applyConstraints({
+                advanced: [{ torch: on }]
+            });
+            document.getElementById('indicator').style.background = on ? "#f1c40f" : "#333";
+            document.getElementById('indicator').style.boxShadow = on ? "0 0 20px #f1c40f" : "none";
+        } catch (e) {
+            console.log("Torch not supported on this device/browser.");
+        }
+    }
+
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    async function startTransmission() {
+        const text = document.getElementById('textInput').value.toUpperCase();
+        if (!text) return;
+
+        if (!track) await initFlash();
+        
+        const status = document.getElementById('status');
+        const unit = 200; // १ डटको समय (ms)
+
+        for (let char of text) {
+            const code = MORSE_CODE[char];
+            if (!code) continue;
+
+            status.innerText = `Sending: ${char}`;
+
+            for (let symbol of code) {
+                if (symbol === '.') {
+                    await toggleFlash(true);
+                    await sleep(unit);
+                } else if (symbol === '-') {
+                    await toggleFlash(true);
+                    await sleep(unit * 3);
+                } else if (symbol === '/') {
+                    await sleep(unit * 7);
+                    continue;
+                }
+                await toggleFlash(false);
+                await sleep(unit);
+            }
+            await sleep(unit * 3); // अक्षरहरू बीचको ग्याप
+        }
+        status.innerText = "Status: Finished!";
+        toggleFlash(false);
+    }
+</script>
+
+</body>
+</html>
