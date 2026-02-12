@@ -3,106 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VLC Flash Messenger</title>
+    <title>VLC Receiver & Decoder</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #000; color: #fff; text-align: center; padding: 20px; }
-        .box { max-width: 400px; margin: auto; border: 2px solid #333; padding: 25px; border-radius: 20px; background: #111; }
-        h1 { color: #f1c40f; font-size: 24px; }
-        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; border-radius: 10px; padding: 10px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 15px; margin-top: 20px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        .btn-flash { background: #f1c40f; color: #000; }
-        #indicator { width: 50px; height: 50px; border-radius: 50%; background: #333; margin: 20px auto; transition: 0.1s; }
-        .status { color: #888; font-size: 14px; margin-top: 10px; }
+        body { font-family: sans-serif; background: #000; color: #fff; text-align: center; }
+        .container { padding: 20px; }
+        #video { width: 100%; max-width: 400px; border: 2px solid #444; border-radius: 10px; }
+        #canvas { display: none; }
+        .data-box { background: #111; padding: 15px; border-radius: 10px; margin-top: 10px; min-height: 50px; border: 1px solid #333; }
+        #indicator { width: 20px; height: 20px; border-radius: 50%; display: inline-block; background: red; }
+        .btn { background: #00ff88; padding: 15px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; width: 100%; max-width: 400px; }
+        #debug { font-size: 12px; color: #666; }
     </style>
 </head>
 <body>
 
-<div class="box">
-    <h1>VLC Messenger</h1>
-    <p>Text to Flashlight (Morse Code)</p>
+<div class="container">
+    <h2>VLC Receiver</h2>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
     
-    <div id="indicator"></div>
+    <div style="margin: 10px 0;">
+        <span id="indicator"></span> Status: <span id="syncStatus">Waiting for Light...</span>
+    </div>
+
+    <button class="btn" onclick="startCamera()">ACTIVATE CAMERA</button>
+
+    <div class="data-box">
+        <strong>Decoded Message:</strong>
+        <div id="decodedText" style="color: #00ff88; font-size: 24px; margin-top: 5px;"></div>
+    </div>
     
-    <textarea id="textInput" placeholder="Type message here..."></textarea>
-    
-    <button class="btn btn-flash" onclick="startTransmission()">TRANSMIT VIA LIGHT</button>
-    
-    <div id="status" class="status">Status: Ready</div>
+    <div id="debug">Brightness Level: 0</div>
 </div>
 
 <script>
-    const MORSE_CODE = {
-        'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
-        'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
-        'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
-        'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
-        'Y': '-.--', 'Z': '--..', '1': '.----', '2': '..---', '3': '...--',
-        '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..',
-        '9': '----.', '0': '-----', ' ': '/'
-    };
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const decodedText = document.getElementById('decodedText');
+    const debug = document.getElementById('debug');
+    const indicator = document.getElementById('indicator');
 
-    let track = null;
+    let isListening = false;
+    let lastState = false; 
+    let startTime = 0;
+    let morseBuffer = "";
 
-    // क्यामेरा र फ्ल्यासलाइट एक्सेस लिने
-    async function initFlash() {
+    async function startCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            track = stream.getVideoTracks()[0];
+            video.srcObject = stream;
+            isListening = true;
+            processFrame();
         } catch (err) {
-            alert("फ्ल्यासलाइट चलाउन क्यामेरा अनुमति चाहिन्छ!");
+            alert("क्यामेरा एक्सेस मिलेन!");
         }
     }
 
-    async function toggleFlash(on) {
-        if (!track) return;
-        try {
-            await track.applyConstraints({
-                advanced: [{ torch: on }]
-            });
-            document.getElementById('indicator').style.background = on ? "#f1c40f" : "#333";
-            document.getElementById('indicator').style.boxShadow = on ? "0 0 20px #f1c40f" : "none";
-        } catch (e) {
-            console.log("Torch not supported on this device/browser.");
-        }
-    }
+    function processFrame() {
+        if (!isListening) return;
 
-    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
-    async function startTransmission() {
-        const text = document.getElementById('textInput').value.toUpperCase();
-        if (!text) return;
-
-        if (!track) await initFlash();
+        // भिडियोको सानो भाग मात्र चेक गर्ने (Performance को लागि)
+        canvas.width = 100;
+        canvas.height = 100;
+        ctx.drawImage(video, 40, 40, 20, 20, 0, 0, 100, 100);
         
-        const status = document.getElementById('status');
-        const unit = 200; // १ डटको समय (ms)
+        const imageData = ctx.getImageData(0, 0, 100, 100);
+        const data = imageData.data;
+        let r, g, b, avg;
+        let totalBrightness = 0;
 
-        for (let char of text) {
-            const code = MORSE_CODE[char];
-            if (!code) continue;
-
-            status.innerText = `Sending: ${char}`;
-
-            for (let symbol of code) {
-                if (symbol === '.') {
-                    await toggleFlash(true);
-                    await sleep(unit);
-                } else if (symbol === '-') {
-                    await toggleFlash(true);
-                    await sleep(unit * 3);
-                } else if (symbol === '/') {
-                    await sleep(unit * 7);
-                    continue;
-                }
-                await toggleFlash(false);
-                await sleep(unit);
-            }
-            await sleep(unit * 3); // अक्षरहरू बीचको ग्याप
+        for (let i = 0; i < data.length; i += 4) {
+            r = data[i]; g = data[i+1]; b = data[i+2];
+            avg = (r + g + b) / 3;
+            totalBrightness += avg;
         }
-        status.innerText = "Status: Finished!";
-        toggleFlash(false);
+
+        const brightness = totalBrightness / (data.length / 4);
+        debug.innerText = `Brightness Level: ${Math.round(brightness)}`;
+
+        // Threshold Logic (वातावरण अनुसार मिलाउनुपर्ने हुन सक्छ)
+        const threshold = 180; 
+        const currentState = brightness > threshold;
+
+        if (currentState !== lastState) {
+            const duration = Date.now() - startTime;
+            handleStateChange(lastState, duration);
+            startTime = Date.now();
+            lastState = currentState;
+            indicator.style.background = currentState ? "#00ff88" : "red";
+        }
+
+        requestAnimationFrame(processFrame);
+    }
+
+    function handleStateChange(state, duration) {
+        if (state === true) { // Light was ON
+            if (duration > 100 && duration < 400) morseBuffer += ".";
+            else if (duration >= 400) morseBuffer += "-";
+        } else { // Light was OFF
+            if (duration > 600) {
+                // अक्षर डिकोड गर्ने लोजिक यहाँ थप्न सकिन्छ
+                decodeMorse();
+            }
+        }
+    }
+
+    function decodeMorse() {
+        // यो एउटा सरल डिकोडिङ नमुना हो
+        if (morseBuffer === ".-") decodedText.innerText += "A";
+        else if (morseBuffer === "-...") decodedText.innerText += "B";
+        // ... अन्य मर्स कोड थप्दै जानुहोस्
+        
+        morseBuffer = ""; // बफर खाली गर्ने
     }
 </script>
-
 </body>
 </html>
