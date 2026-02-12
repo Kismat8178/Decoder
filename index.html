@@ -3,120 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VLC Receiver & Decoder</title>
+    <title>VLC Ultimate Messenger</title>
     <style>
-        body { font-family: sans-serif; background: #000; color: #fff; text-align: center; }
-        .container { padding: 20px; }
-        #video { width: 100%; max-width: 400px; border: 2px solid #444; border-radius: 10px; }
-        #canvas { display: none; }
-        .data-box { background: #111; padding: 15px; border-radius: 10px; margin-top: 10px; min-height: 50px; border: 1px solid #333; }
-        #indicator { width: 20px; height: 20px; border-radius: 50%; display: inline-block; background: red; }
-        .btn { background: #00ff88; padding: 15px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; width: 100%; max-width: 400px; }
-        #debug { font-size: 12px; color: #666; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0b0b0b; color: #eee; text-align: center; margin: 0; padding: 10px; }
+        .app-container { max-width: 500px; margin: auto; background: #1a1a1a; padding: 20px; border-radius: 20px; box-shadow: 0 0 30px rgba(0,0,0,0.7); }
+        .section { background: #252525; padding: 15px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #333; }
+        h2 { color: #f1c40f; font-size: 18px; margin-top: 0; }
+        video { width: 100%; border-radius: 10px; background: #000; }
+        textarea { width: 100%; height: 60px; background: #111; color: #0f0; border: 1px solid #444; border-radius: 8px; padding: 10px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-send { background: #f1c40f; color: #000; }
+        .btn-receive { background: #00ff88; color: #000; }
+        #indicator { width: 30px; height: 30px; border-radius: 50%; background: #444; display: inline-block; vertical-align: middle; }
+        #decodedOutput { font-size: 24px; color: #00ff88; min-height: 40px; background: #111; border-radius: 8px; padding: 10px; margin-top: 10px; word-break: break-all; }
+        #debugInfo { font-size: 11px; color: #666; margin-top: 5px; }
+        canvas { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>VLC Receiver</h2>
-    <video id="video" autoplay playsinline></video>
+<div class="app-container">
+    <h1 style="font-size: 22px; color: #fff;">VLC Messenger</h1>
+
+    <div class="section">
+        <h2>1. पठाउने (Transmitter)</h2>
+        <textarea id="textInput" placeholder="Type message..."></textarea>
+        <button class="btn btn-send" onclick="startTransmission()">TRANSMIT (Flashlight)</button>
+    </div>
+
+    <div class="section">
+        <h2>2. पाउने (Receiver)</h2>
+        <video id="video" autoplay playsinline></video>
+        <button class="btn btn-receive" onclick="startCamera()">ACTIVATE CAMERA</button>
+        <div style="margin-top: 10px;">
+            <div id="indicator"></div>
+            <span id="syncStatus"> Waiting for light...</span>
+        </div>
+        <div id="decodedOutput"></div>
+        <div id="debugInfo">Brightness: 0 | Buffer: </div>
+        <button class="btn" style="background: #444; color: #fff; margin-top: 5px;" onclick="clearLog()">Clear Output</button>
+    </div>
+
     <canvas id="canvas"></canvas>
-    
-    <div style="margin: 10px 0;">
-        <span id="indicator"></span> Status: <span id="syncStatus">Waiting for Light...</span>
-    </div>
-
-    <button class="btn" onclick="startCamera()">ACTIVATE CAMERA</button>
-
-    <div class="data-box">
-        <strong>Decoded Message:</strong>
-        <div id="decodedText" style="color: #00ff88; font-size: 24px; margin-top: 5px;"></div>
-    </div>
-    
-    <div id="debug">Brightness Level: 0</div>
 </div>
 
 <script>
+    // --- Morse Code Mapping ---
+    const MORSE = {'A':'.-','B':'-...','C':'-.-.','D':'-..','E':'.','F':'..-.','G':'--.','H':'....','I':'..','J':'.---','K':'-.-','L':'.-..','M':'--','N':'-.','O':'---','P':'.--.','Q':'--.-','R':'.-.','S':'...','T':'-','U':'..-','V':'...-','W':'.--','X':'-..-','Y':'-.--','Z':'--..','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....','6':'-....','7':'--...','8':'---..','9':'----.','0':'-----',' ':'/'};
+    const REVERSE_MORSE = Object.fromEntries(Object.entries(MORSE).map(([k,v]) => [v,k]));
+
+    let track = null;
+    const unit = 250; // Timing unit in ms
+
+    // --- Transmitter Logic ---
+    async function toggleFlash(on) {
+        if (!track) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                track = stream.getVideoTracks()[0];
+            } catch (e) { return; }
+        }
+        try { await track.applyConstraints({ advanced: [{ torch: on }] }); } catch (e) {}
+    }
+
+    async function startTransmission() {
+        const text = document.getElementById('textInput').value.toUpperCase();
+        for (let char of text) {
+            const code = MORSE[char];
+            if (!code) continue;
+            for (let symbol of code) {
+                await toggleFlash(true);
+                await new Promise(r => setTimeout(r, symbol === '.' ? unit : unit * 3));
+                await toggleFlash(false);
+                await new Promise(r => setTimeout(r, unit));
+            }
+            await new Promise(r => setTimeout(r, unit * 2));
+        }
+    }
+
+    // --- Receiver Logic ---
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const decodedText = document.getElementById('decodedText');
-    const debug = document.getElementById('debug');
-    const indicator = document.getElementById('indicator');
-
-    let isListening = false;
-    let lastState = false; 
-    let startTime = 0;
+    const ctx = canvas.getContext('2d', {willReadFrequently: true});
+    let lastState = false;
+    let startTime = Date.now();
     let morseBuffer = "";
 
     async function startCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            video.srcObject = stream;
-            isListening = true;
-            processFrame();
-        } catch (err) {
-            alert("क्यामेरा एक्सेस मिलेन!");
-        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        processFrame();
     }
 
     function processFrame() {
-        if (!isListening) return;
+        canvas.width = 50; canvas.height = 50;
+        ctx.drawImage(video, 20, 20, 10, 10, 0, 0, 50, 50);
+        const data = ctx.getImageData(0,0,50,50).data;
+        let brightness = 0;
+        for(let i=0; i<data.length; i+=4) brightness += (data[i]+data[i+1]+data[i+2])/3;
+        brightness /= (data.length/4);
 
-        // भिडियोको सानो भाग मात्र चेक गर्ने (Performance को लागि)
-        canvas.width = 100;
-        canvas.height = 100;
-        ctx.drawImage(video, 40, 40, 20, 20, 0, 0, 100, 100);
-        
-        const imageData = ctx.getImageData(0, 0, 100, 100);
-        const data = imageData.data;
-        let r, g, b, avg;
-        let totalBrightness = 0;
-
-        for (let i = 0; i < data.length; i += 4) {
-            r = data[i]; g = data[i+1]; b = data[i+2];
-            avg = (r + g + b) / 3;
-            totalBrightness += avg;
-        }
-
-        const brightness = totalBrightness / (data.length / 4);
-        debug.innerText = `Brightness Level: ${Math.round(brightness)}`;
-
-        // Threshold Logic (वातावरण अनुसार मिलाउनुपर्ने हुन सक्छ)
-        const threshold = 180; 
+        const threshold = 180; // उज्यालो अनुसार यसलाई १५०-२०० को बीचमा मिलाउनुहोस्
         const currentState = brightness > threshold;
+        document.getElementById('debugInfo').innerText = `Brightness: ${Math.round(brightness)} | Buffer: ${morseBuffer}`;
+        document.getElementById('indicator').style.background = currentState ? "#00ff88" : "#444";
 
         if (currentState !== lastState) {
             const duration = Date.now() - startTime;
-            handleStateChange(lastState, duration);
+            if (lastState === true) { // Light was ON
+                if (duration < unit * 2) morseBuffer += ".";
+                else morseBuffer += "-";
+            } else { // Light was OFF
+                if (duration > unit * 3) {
+                    const char = REVERSE_MORSE[morseBuffer];
+                    if (char) document.getElementById('decodedOutput').innerText += char;
+                    morseBuffer = "";
+                }
+            }
             startTime = Date.now();
             lastState = currentState;
-            indicator.style.background = currentState ? "#00ff88" : "red";
         }
-
         requestAnimationFrame(processFrame);
     }
 
-    function handleStateChange(state, duration) {
-        if (state === true) { // Light was ON
-            if (duration > 100 && duration < 400) morseBuffer += ".";
-            else if (duration >= 400) morseBuffer += "-";
-        } else { // Light was OFF
-            if (duration > 600) {
-                // अक्षर डिकोड गर्ने लोजिक यहाँ थप्न सकिन्छ
-                decodeMorse();
-            }
-        }
-    }
-
-    function decodeMorse() {
-        // यो एउटा सरल डिकोडिङ नमुना हो
-        if (morseBuffer === ".-") decodedText.innerText += "A";
-        else if (morseBuffer === "-...") decodedText.innerText += "B";
-        // ... अन्य मर्स कोड थप्दै जानुहोस्
-        
-        morseBuffer = ""; // बफर खाली गर्ने
-    }
+    function clearLog() { document.getElementById('decodedOutput').innerText = ""; morseBuffer = ""; }
 </script>
 </body>
 </html>
+
