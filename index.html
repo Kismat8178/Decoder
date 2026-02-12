@@ -1,133 +1,258 @@
 <!DOCTYPE html>
-<html lang="ne">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>School Project: Light Messenger</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VLC Ultimate Messenger</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #0b0b0b; color: #eee; text-align: center; margin: 0; padding: 10px; }
-        .app-container { max-width: 500px; margin: auto; background: #1a1a1a; padding: 20px; border-radius: 20px; box-shadow: 0 0 30px rgba(0,0,0,0.7); }
-        .section { background: #252525; padding: 15px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #333; }
-        h2 { color: #f1c40f; font-size: 18px; margin-top: 0; }
-        video { width: 100%; border-radius: 10px; background: #000; }
-        textarea { width: 100%; height: 60px; background: #111; color: #0f0; border: 1px solid #444; border-radius: 8px; padding: 10px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-send { background: #f1c40f; color: #000; }
-        .btn-receive { background: #00ff88; color: #000; }
-        #indicator { width: 30px; height: 30px; border-radius: 50%; background: #444; display: inline-block; vertical-align: middle; }
-        #decodedOutput { font-size: 24px; color: #00ff88; min-height: 40px; background: #111; border-radius: 8px; padding: 10px; margin-top: 10px; word-break: break-all; }
-        #debugInfo { font-size: 11px; color: #666; margin-top: 5px; }
-        canvas { display: none; }
+        /* 9th Grader CSS Style - Very Basic */
+        body {
+            background-color: white;
+            color: black;
+            font-family: "Times New Roman", Times, serif;
+            text-align: center;
+        }
+        h1 {
+            color: blue;
+            text-decoration: underline;
+        }
+        .box {
+            border: 5px solid black;
+            padding: 20px;
+            margin: 10px;
+            background-color: #f0f0f0;
+        }
+        textarea {
+            width: 80%;
+            height: 100px;
+            border: 2px solid blue;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 20px;
+            background-color: lightgray;
+            border: 2px solid black;
+            cursor: pointer;
+        }
+        button:active {
+            background-color: gray;
+        }
+        video {
+            width: 300px;
+            border: 5px solid red;
+        }
+        #decodedMessage {
+            font-size: 30px;
+            color: green;
+            font-weight: bold;
+            border: 2px dashed green;
+            padding: 10px;
+            min-height: 50px;
+        }
+        #lightStatus {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 1px solid black;
+            display: inline-block;
+            background-color: black;
+        }
     </style>
 </head>
 <body>
 
-<div class="app-container">
-    <h1 style="font-size: 22px; color: #fff;">VLC Messenger</h1>
+    <h1>MY SCIENCE PROJECT: VLC APP</h1>
+    <p>By: [Your Name]</p>
+    <hr>
 
-    <div class="section">
-        <h2>1. पठाउने (Transmitter)</h2>
-        <textarea id="textInput" placeholder="Type message..."></textarea>
-        <button class="btn btn-send" onclick="startTransmission()">TRANSMIT (Flashlight)</button>
+    <div class="box">
+        <h3>PART 1: SENDER (Flashlight)</h3>
+        <p>Type words and numbers below:</p>
+        <textarea id="msgInput" placeholder="HELLO 123"></textarea>
+        <br><br>
+        <button onclick="sendFullMessage()">SEND MESSAGE NOW</button>
+        <p id="sendStat">Status: Waiting...</p>
     </div>
 
-    <div class="section">
-        <h2>2. पाउने (Receiver)</h2>
-        <video id="video" autoplay playsinline></video>
-        <button class="btn btn-receive" onclick="startCamera()">ACTIVATE CAMERA</button>
-        <div style="margin-top: 10px;">
-            <div id="indicator"></div>
-            <span id="syncStatus"> Waiting for light...</span>
-        </div>
-        <div id="decodedOutput"></div>
-        <div id="debugInfo">Brightness: 0 | Buffer: </div>
-        <button class="btn" style="background: #444; color: #fff; margin-top: 5px;" onclick="clearLog()">Clear Output</button>
+    <div class="box">
+        <h3>PART 2: RECEIVER (Camera)</h3>
+        <p>Point camera at the flashlight:</p>
+        <video id="video" playsinline autoplay></video>
+        <br>
+        <button onclick="startCamera()">START CAMERA</button>
+        <br><br>
+        <div id="lightStatus"></div>
+        <p>Light Level: <span id="brightLevel">0</span></p>
+        
+        <h3>Decoded Text:</h3>
+        <div id="decodedMessage"></div>
+        <button onclick="document.getElementById('decodedMessage').innerText = ''">Clear</button>
     </div>
 
-    <canvas id="canvas"></canvas>
-</div>
+    <canvas id="canvas" style="display:none;"></canvas>
 
 <script>
-    // --- Morse Code Mapping ---
-    const MORSE = {'A':'.-','B':'-...','C':'-.-.','D':'-..','E':'.','F':'..-.','G':'--.','H':'....','I':'..','J':'.---','K':'-.-','L':'.-..','M':'--','N':'-.','O':'---','P':'.--.','Q':'--.-','R':'.-.','S':'...','T':'-','U':'..-','V':'...-','W':'.--','X':'-..-','Y':'-.--','Z':'--..','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....','6':'-....','7':'--...','8':'---..','9':'----.','0':'-----',' ':'/'};
-    const REVERSE_MORSE = Object.fromEntries(Object.entries(MORSE).map(([k,v]) => [v,k]));
+    // --- DICTIONARY (LETTERS & NUMBERS) ---
+    const MORSE = {
+        'A':'.-', 'B':'-...', 'C':'-.-.', 'D':'-..', 'E':'.', 'F':'..-.',
+        'G':'--.', 'H':'....', 'I':'..', 'J':'.---', 'K':'-.-', 'L':'.-..',
+        'M':'--', 'N':'-.', 'O':'---', 'P':'.--.', 'Q':'--.-', 'R':'.-.',
+        'S':'...', 'T':'-', 'U':'..-', 'V':'...-', 'W':'.--', 'X':'-..-',
+        'Y':'-.--', 'Z':'--..', 
+        '1':'.----', '2':'..---', '3':'...--', '4':'....-', '5':'.....',
+        '6':'-....', '7':'--...', '8':'---..', '9':'----.', '0':'-----',
+        ' ': '/' // Slash handles space between words
+    };
 
+    const REVERSE_MORSE = {};
+    for (let key in MORSE) {
+        REVERSE_MORSE[MORSE[key]] = key;
+    }
+
+    // --- SENDER LOGIC ---
     let track = null;
-    const unit = 250; // Timing unit in ms
+    const TIME_UNIT = 150; // Speed of flash (lower is faster)
 
-    // --- Transmitter Logic ---
-    async function toggleFlash(on) {
-        if (!track) {
+    async function getFlashlight() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            track = stream.getVideoTracks()[0];
+        } catch (err) {
+            alert("Error: Camera permission needed for flashlight!");
+        }
+    }
+
+    async function flash(isOn) {
+        if (!track) await getFlashlight();
+        if (track) {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                track = stream.getVideoTracks()[0];
-            } catch (e) { return; }
-        }
-        try { await track.applyConstraints({ advanced: [{ torch: on }] }); } catch (e) {}
-    }
-
-    async function startTransmission() {
-        const text = document.getElementById('textInput').value.toUpperCase();
-        for (let char of text) {
-            const code = MORSE[char];
-            if (!code) continue;
-            for (let symbol of code) {
-                await toggleFlash(true);
-                await new Promise(r => setTimeout(r, symbol === '.' ? unit : unit * 3));
-                await toggleFlash(false);
-                await new Promise(r => setTimeout(r, unit));
+                await track.applyConstraints({ advanced: [{ torch: isOn }] });
+            } catch (e) {
+                console.log("Torch not supported");
             }
-            await new Promise(r => setTimeout(r, unit * 2));
         }
     }
 
-    // --- Receiver Logic ---
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', {willReadFrequently: true});
-    let lastState = false;
-    let startTime = Date.now();
-    let morseBuffer = "";
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    async function startCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        video.srcObject = stream;
-        processFrame();
-    }
+    async function sendFullMessage() {
+        const text = document.getElementById("msgInput").value.toUpperCase();
+        document.getElementById("sendStat").innerText = "Status: SENDING...";
+        
+        // Loop through EVERY letter in the text
+        for (let i = 0; i < text.length; i++) {
+            let char = text[i];
+            
+            if (char === ' ') {
+                // Wait longer for space between words
+                await sleep(TIME_UNIT * 7);
+                continue;
+            }
 
-    function processFrame() {
-        canvas.width = 50; canvas.height = 50;
-        ctx.drawImage(video, 20, 20, 10, 10, 0, 0, 50, 50);
-        const data = ctx.getImageData(0,0,50,50).data;
-        let brightness = 0;
-        for(let i=0; i<data.length; i+=4) brightness += (data[i]+data[i+1]+data[i+2])/3;
-        brightness /= (data.length/4);
-
-        const threshold = 180; // उज्यालो अनुसार यसलाई १५०-२०० को बीचमा मिलाउनुहोस्
-        const currentState = brightness > threshold;
-        document.getElementById('debugInfo').innerText = `Brightness: ${Math.round(brightness)} | Buffer: ${morseBuffer}`;
-        document.getElementById('indicator').style.background = currentState ? "#00ff88" : "#444";
-
-        if (currentState !== lastState) {
-            const duration = Date.now() - startTime;
-            if (lastState === true) { // Light was ON
-                if (duration < unit * 2) morseBuffer += ".";
-                else morseBuffer += "-";
-            } else { // Light was OFF
-                if (duration > unit * 3) {
-                    const char = REVERSE_MORSE[morseBuffer];
-                    if (char) document.getElementById('decodedOutput').innerText += char;
-                    morseBuffer = "";
+            let code = MORSE[char];
+            if (code) {
+                // Flash the code for this letter
+                for (let j = 0; j < code.length; j++) {
+                    let symbol = code[j];
+                    
+                    await flash(true); // LIGHT ON
+                    
+                    if (symbol === '.') await sleep(TIME_UNIT);       // Dot = 1 unit
+                    else if (symbol === '-') await sleep(TIME_UNIT * 3); // Dash = 3 units
+                    
+                    await flash(false); // LIGHT OFF
+                    await sleep(TIME_UNIT); // Gap between parts of letter
                 }
             }
-            startTime = Date.now();
-            lastState = currentState;
+            // Gap between letters
+            await sleep(TIME_UNIT * 3);
         }
-        requestAnimationFrame(processFrame);
+        
+        document.getElementById("sendStat").innerText = "Status: DONE!";
+        await flash(false);
     }
 
-    function clearLog() { document.getElementById('decodedOutput').innerText = ""; morseBuffer = ""; }
+    // --- RECEIVER LOGIC ---
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const output = document.getElementById('decodedMessage');
+    
+    let isLightOn = false;
+    let lastChangeTime = Date.now();
+    let currentSequence = ""; // Stores dots/dashes like "..."
+    
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
+            video.srcObject = stream;
+            processVideo();
+        } catch (e) {
+            alert("Camera failed.");
+        }
+    }
+
+    function processVideo() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = 50;
+            canvas.height = 50;
+            // Draw center of video to canvas
+            ctx.drawImage(video, video.videoWidth/2 - 25, video.videoHeight/2 - 25, 50, 50, 0, 0, 50, 50);
+            
+            // Calculate brightness
+            let frame = ctx.getImageData(0, 0, 50, 50).data;
+            let total = 0;
+            for (let i = 0; i < frame.length; i += 4) {
+                total += (frame[i] + frame[i+1] + frame[i+2]) / 3;
+            }
+            let avgBrightness = total / (frame.length / 4);
+            
+            document.getElementById("brightLevel").innerText = Math.round(avgBrightness);
+
+            // THRESHOLD (Adjust if needed, 180 is standard for flash)
+            let threshold = 200; 
+            let now = Date.now();
+            let duration = now - lastChangeTime;
+
+            let detectedOn = avgBrightness > threshold;
+
+            // Visual Indicator
+            document.getElementById("lightStatus").style.backgroundColor = detectedOn ? "yellow" : "black";
+
+            if (detectedOn !== isLightOn) {
+                // STATE CHANGED (On -> Off OR Off -> On)
+                
+                if (isLightOn === true && detectedOn === false) {
+                    // Light just turned OFF. Measure how long it was ON.
+                    if (duration < 400) {
+                        currentSequence += ".";
+                    } else {
+                        currentSequence += "-";
+                    }
+                } 
+                
+                isLightOn = detectedOn;
+                lastChangeTime = now;
+            } else {
+                // STATE IS SAME (Light is still OFF)
+                // If light is OFF for a long time, the letter is finished.
+                if (isLightOn === false && duration > 1000 && currentSequence !== "") {
+                    let letter = REVERSE_MORSE[currentSequence];
+                    if (letter) {
+                        output.innerText += letter;
+                    } else {
+                        output.innerText += "?";
+                    }
+                    currentSequence = ""; // Reset for next letter
+                    output.innerText += " "; // Space for readability
+                    lastChangeTime = now; // Prevent double spacing
+                }
+            }
+        }
+        requestAnimationFrame(processVideo);
+    }
 </script>
+
 </body>
 </html>
-
